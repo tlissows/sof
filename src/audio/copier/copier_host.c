@@ -99,7 +99,7 @@ static int init_pipeline_reg(struct comp_dev *dev)
 	struct ipc4_pipeline_registers pipe_reg;
 	uint32_t gateway_id;
 
-	gateway_id = cd->config.gtw_cfg.node_id.f.v_index;
+	gateway_id = cd->config->gtw_cfg.node_id.f.v_index;
 	if (gateway_id >= IPC4_MAX_PIPELINE_REG_SLOTS) {
 		comp_err(dev, "gateway_id %u out of array bounds.", gateway_id);
 		return -EINVAL;

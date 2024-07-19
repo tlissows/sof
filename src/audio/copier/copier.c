@@ -62,8 +62,7 @@ static int copier_init(struct processing_module *mod)
 	struct module_data *md = &mod->priv;
 	struct ipc4_copier_module_cfg *copier = (struct ipc4_copier_module_cfg *)md->cfg.init_data;
 	struct comp_ipc_config *config = &dev->ipc_config;
-	void *gtw_cfg = NULL;
-	size_t gtw_cfg_size;
+	size_t copier_cfg_size;
 	int i, ret = 0;
 
 	cd = rzalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM, sizeof(*cd));
@@ -71,42 +70,19 @@ static int copier_init(struct processing_module *mod)
 		return -ENOMEM;
 
 	md->private = cd;
-	/*
-	 * Don't copy the config_data[] variable size array, we don't need to
-	 * store it, it's only used during IPC processing, besides we haven't
-	 * allocated space for it, so don't "fix" this!
-	 */
-	if (memcpy_s(&cd->config, sizeof(cd->config), copier, sizeof(*copier)) < 0) {
-		ret = -EINVAL;
-		goto error_cd;
+
+	copier_cfg_size = sizeof(*copier) + copier->gtw_cfg.config_length * sizeof(uint32_t);
+
+	cd->config = rmalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM, copier_cfg_size);
+	if (!cd->config) {
+		ret = -ENOMEM;
+		goto error;
 	}
 
-	/* Allocate memory and store gateway_cfg in runtime. Gateway cfg has to
-	 * be kept even after copier is created e.g. during SET_PIPELINE_STATE
-	 * IPC when dai_config_dma_channel() is called second time and DMA
-	 * config is used to assign dma_channel_id value.
-	 */
-	if (copier->gtw_cfg.config_length) {
-		gtw_cfg_size = copier->gtw_cfg.config_length << 2;
-		gtw_cfg = rmalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM,
-				  gtw_cfg_size);
-		if (!gtw_cfg) {
-			ret = -ENOMEM;
-			goto error_cd;
-		}
-
-		ret = memcpy_s(gtw_cfg, gtw_cfg_size, &copier->gtw_cfg.config_data,
-			       gtw_cfg_size);
-		if (ret) {
-			comp_err(dev, "Unable to copy gateway config from copier blob");
-			goto error;
-		}
-
-		cd->gtw_cfg = gtw_cfg;
-	}
+	memcpy(cd->config, copier, copier_cfg_size);
 
 	for (i = 0; i < IPC4_COPIER_MODULE_OUTPUT_PINS_COUNT; i++)
-		cd->out_fmt[i] = cd->config.out_fmt;
+		cd->out_fmt[i] = cd->config->out_fmt;
 
 	ipc_pipe = ipc_get_comp_by_ppl_id(ipc, COMP_TYPE_PIPELINE,
 					  config->pipeline_id,
@@ -174,8 +150,7 @@ static int copier_init(struct processing_module *mod)
 	dev->state = COMP_STATE_READY;
 	return 0;
 error:
-	rfree(gtw_cfg);
-error_cd:
+	rfree(cd->config);
 	rfree(cd);
 	return ret;
 }
@@ -200,8 +175,7 @@ static int copier_free(struct processing_module *mod)
 		break;
 	}
 
-	if (cd)
-		rfree(cd->gtw_cfg);
+	rfree(cd->config);
 	rfree(cd);
 
 	return 0;
@@ -244,12 +218,12 @@ static int copier_prepare(struct processing_module *mod,
 		/* set up format conversion function for pin 0, for other pins (if any)
 		 * format is set in IPC4_COPIER_MODULE_CFG_PARAM_SET_SINK_FORMAT handler
 		 */
-		cd->converter[0] = get_converter_func(&cd->config.base.audio_fmt,
-							      &cd->config.out_fmt, ipc4_gtw_none,
+		cd->converter[0] = get_converter_func(&cd->config->base.audio_fmt,
+							      &cd->config->out_fmt, ipc4_gtw_none,
 							      ipc4_bidirection, DUMMY_CHMAP);
 		if (!cd->converter[0]) {
 			comp_err(dev, "can't support for in format %d, out format %d",
-				 cd->config.base.audio_fmt.depth,  cd->config.out_fmt.depth);
+				 cd->config->base.audio_fmt.depth,  cd->config->out_fmt.depth);
 			return -EINVAL;
 		}
 	}
@@ -674,7 +648,7 @@ static int copier_set_sink_fmt(struct comp_dev *dev, const void *data,
 		return -EINVAL;
 	}
 
-	if (memcmp(&cd->config.base.audio_fmt, &sink_fmt->source_fmt,
+	if (memcmp(&cd->config->base.audio_fmt, &sink_fmt->source_fmt,
 		   sizeof(sink_fmt->source_fmt))) {
 		comp_err(dev, "error: source fmt should be equal to input fmt");
 		return -EINVAL;
@@ -719,10 +693,10 @@ static int set_attenuation(struct comp_dev *dev, uint32_t data_offset, const cha
 		return -EINVAL;
 	}
 
-	audio_stream_fmt_conversion(cd->config.out_fmt.depth,
-				    cd->config.out_fmt.valid_bit_depth,
+	audio_stream_fmt_conversion(cd->config->out_fmt.depth,
+				    cd->config->out_fmt.valid_bit_depth,
 				    &frame_fmt, &valid_fmt,
-				    cd->config.out_fmt.s_type);
+				    cd->config->out_fmt.s_type);
 
 	if (frame_fmt < SOF_IPC_FRAME_S24_4LE) {
 		comp_err(dev, "frame_fmt %d isn't supported by attenuation",
@@ -741,8 +715,8 @@ static int set_chmap(struct comp_dev *dev, const void *data, size_t data_size)
 	struct processing_module *mod = comp_mod(dev);
 	struct copier_data *cd = module_get_private_data(mod);
 	enum ipc4_direction_type dir;
-	struct ipc4_audio_format in_fmt = cd->config.base.audio_fmt;
-	struct ipc4_audio_format out_fmt = cd->config.out_fmt;
+	struct ipc4_audio_format in_fmt = cd->config->base.audio_fmt;
+	struct ipc4_audio_format out_fmt = cd->config->out_fmt;
 	pcm_converter_func process;
 	pcm_converter_func converters[IPC4_COPIER_MODULE_OUTPUT_PINS_COUNT];
 	int i;

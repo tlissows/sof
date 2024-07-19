@@ -78,7 +78,7 @@ static int copier_alh_assign_dai_index(struct comp_dev *dev,
 	size_t alh_cfg_size, dma_config_length;
 	int i, dai_num, ret;
 
-	if (!cd->config.gtw_cfg.config_length) {
+	if (!cd->config->gtw_cfg.config_length) {
 		comp_err(mod->dev, "No gateway config found in blob!");
 		return -EINVAL;
 	}
@@ -88,7 +88,7 @@ static int copier_alh_assign_dai_index(struct comp_dev *dev,
 		/* We use DAI_INTEL_HDA for ACE 2.0 platforms */
 		alh_cfg_size = get_alh_config_size(alh_blob);
 		dma_config = (uint8_t *)gtw_cfg_data + alh_cfg_size;
-		dma_config_length = (cd->config.gtw_cfg.config_length << 2) - alh_cfg_size;
+		dma_config_length = (cd->config->gtw_cfg.config_length << 2) - alh_cfg_size;
 
 		/* Here we check node_id if we need to use FW aggregation,
 		 * in other words do we need to create multiple dai or not
@@ -266,7 +266,7 @@ int copier_dai_create(struct comp_dev *dev, struct copier_data *cd,
 		dai.type = SOF_DAI_INTEL_SSP;
 		dai.is_config_blob = true;
 		cd->gtw_type = ipc4_gtw_ssp;
-		ret = ipc4_find_dma_config(&dai, (uint8_t *)cd->gtw_cfg,
+		ret = ipc4_find_dma_config(&dai, (uint8_t *)copier->gtw_cfg.config_data,
 					   copier->gtw_cfg.config_length * 4);
 		if (ret != 0) {
 			comp_err(dev, "No ssp dma_config found in blob!");
@@ -285,8 +285,8 @@ int copier_dai_create(struct comp_dev *dev, struct copier_data *cd,
 		dai.is_config_blob = true;
 		cd->gtw_type = ipc4_gtw_alh;
 #endif /* ACE_VERSION > ACE_VERSION_1_5 */
-		ret = copier_alh_assign_dai_index(dev, cd->gtw_cfg, node_id,
-						  &dai, dai_index, &dai_count);
+		ret = copier_alh_assign_dai_index(dev, (void *)copier->gtw_cfg.config_data,
+						  node_id, &dai, dai_index, &dai_count);
 		if (ret)
 			return ret;
 		break;
@@ -294,7 +294,7 @@ int copier_dai_create(struct comp_dev *dev, struct copier_data *cd,
 		dai.type = SOF_DAI_INTEL_DMIC;
 		dai.is_config_blob = true;
 		cd->gtw_type = ipc4_gtw_dmic;
-		ret = ipc4_find_dma_config(&dai, (uint8_t *)cd->gtw_cfg,
+		ret = ipc4_find_dma_config(&dai, (uint8_t *)copier->gtw_cfg.config_data,
 					   copier->gtw_cfg.config_length * 4);
 		if (ret != 0) {
 			comp_err(dev, "No dmic dma_config found in blob!");
@@ -510,8 +510,8 @@ int copier_dai_params(struct copier_data *cd, struct comp_dev *dev,
 	int j, ret;
 
 	if (cd->endpoint_num == 1) {
-		struct ipc4_audio_format in_fmt = cd->config.base.audio_fmt;
-		struct ipc4_audio_format out_fmt = cd->config.out_fmt;
+		struct ipc4_audio_format in_fmt = cd->config->base.audio_fmt;
+		struct ipc4_audio_format out_fmt = cd->config->out_fmt;
 		enum ipc4_direction_type dir;
 
 		ret = dai_common_params(cd->dd[0], dev, params);

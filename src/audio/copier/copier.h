@@ -237,13 +237,8 @@ struct ipc4_data_segment_enabled {
 } __attribute__((packed, aligned(4)));
 
 struct copier_data {
-	/*
-	 * struct ipc4_copier_module_cfg actually has variable size, but we
-	 * don't need the variable size array at the end, we won't be copying it
-	 * from the IPC data.
-	 */
-	struct ipc4_copier_module_cfg config;
-	void *gtw_cfg;
+	/* Contains the whole config copied from IPC data (incl. variable size gateway cfg). */
+	struct ipc4_copier_module_cfg *config;
 	enum ipc4_gateway_type gtw_type;
 	struct comp_dev *endpoint[IPC4_COPIER_MODULE_OUTPUT_PINS_COUNT];
 	struct comp_buffer *endpoint_buffer[IPC4_COPIER_MODULE_OUTPUT_PINS_COUNT];

@@ -66,15 +66,15 @@ void copier_update_params(struct copier_data *cd, struct comp_dev *dev,
 
 	memset(params, 0, sizeof(*params));
 	params->direction = cd->direction;
-	params->channels = cd->config.base.audio_fmt.channels_count;
-	params->rate = cd->config.base.audio_fmt.sampling_frequency;
-	params->sample_container_bytes = cd->config.base.audio_fmt.depth / 8;
-	params->sample_valid_bytes = cd->config.base.audio_fmt.valid_bit_depth / 8;
+	params->channels = cd->config->base.audio_fmt.channels_count;
+	params->rate = cd->config->base.audio_fmt.sampling_frequency;
+	params->sample_container_bytes = cd->config->base.audio_fmt.depth / 8;
+	params->sample_valid_bytes = cd->config->base.audio_fmt.valid_bit_depth / 8;
 
-	params->stream_tag = cd->config.gtw_cfg.node_id.f.v_index + 1;
+	params->stream_tag = cd->config->gtw_cfg.node_id.f.v_index + 1;
 	params->frame_fmt = dev->ipc_config.frame_fmt;
-	params->buffer_fmt = cd->config.base.audio_fmt.interleaving_style;
-	params->buffer.size = cd->config.base.ibs;
+	params->buffer_fmt = cd->config->base.audio_fmt.interleaving_style;
+	params->buffer.size = cd->config->base.ibs;
 
 	/* disable ipc3 stream position */
 	params->no_stream_position = 1;
@@ -100,7 +100,7 @@ void copier_update_params(struct copier_data *cd, struct comp_dev *dev,
 		if (dev->ipc_config.type == SOF_COMP_DAI &&
 		    (cd->endpoint_num > 1 || params->direction == SOF_IPC_STREAM_CAPTURE))
 			break;
-		params->buffer.size = cd->config.base.obs;
+		params->buffer.size = cd->config->base.obs;
 		params->sample_container_bytes = cd->out_fmt->depth / 8;
 		params->sample_valid_bytes = cd->out_fmt->valid_bit_depth / 8;
 		break;
